@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 
 class Distance():
-    """Class to determine the closest point on a decision boundary to a point P"""
+    """Determine the closest point on a decision boundary to a point P"""
 
     def __init__(self, p, dbf, b, norm=False, plot=False):
         self.p = p # point p
@@ -21,7 +21,7 @@ class Distance():
 
 
     def objective(self, x):
-        """The objective is to minimise the function below, which is the Euclidean distance of a point X from P"""
+        """The objective is to minimise the returned function below; the Euclidean distance of a point X from P"""
         y = self.f(x)
         return self.euclidean_distance(x, y)
 
@@ -29,13 +29,8 @@ class Distance():
         # run the dbf and save the result
         try:
             f = self.dbf(x)
-        except:
-            pass
-
-            try:
-                f = self.dbf(x).x
-            except:
-                pass
+        except Exception as e:
+            print(f'The decision boundary function could not be evaluated over the x values supplied owing to error: {e}')
 
         # cap the result by boundaries, requires conversion to array first
         f = np.array(f)
@@ -44,7 +39,7 @@ class Distance():
         return f
 
     def g(self, boundary_point, p, num_data_points=50):
-        # return y coordinates of a line that connects p to boundary_point
+        # return coordinates describing a line between p and boundary_point
         m = (boundary_point[1] - p[1]) / (boundary_point[0] - p[0])
         c = boundary_point[1] - m * boundary_point[0]
 
@@ -137,10 +132,11 @@ class Distance():
         self.norm_distance = round(self.distance / self.max_distance, 3)
 
         if self.plot:
-            ax.plot(self.max_distance_edge_point[0], self.max_distance_edge_point[1], color='orange', marker='.', label='E', markersize=10, clip_on=False)
+            ax.plot(self.max_distance_edge_point[0], self.max_distance_edge_point[1], color='orange', marker='.', label='E'
+                    , markersize=10, clip_on=False)
             ax.plot(self.max_distance_boundary_point[0], self.max_distance_boundary_point[1], '.', label='MB', markersize=10)
-            ax.plot(*self.g(boundary_point=self.max_distance_boundary_point, p=self.max_distance_edge_point), 'k--',
-                     label=f'Max Distance = {round(self.max_distance, 3)}')
+            ax.plot(*self.g(boundary_point=self.max_distance_boundary_point, p=self.max_distance_edge_point), 'k--'
+                    , label=f'Max Distance = {round(self.max_distance, 3)}')
 
             ax.set_title(f'Distance: {self.distance}, of max: {round(100*self.norm_distance, 3)}%')
             ax.legend()
