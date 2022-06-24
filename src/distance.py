@@ -58,12 +58,12 @@ class Distance():
 
         # find the closest point on the boundary to the point p
         closest_boundary_point_to_p = minimize_scalar(self.objective, bounds=tuple(self.bounds['x']), method='bounded')
-        self.boundsoundary_point = [closest_boundary_point_to_p.x, float(self.f(closest_boundary_point_to_p.x))]
-        self.boundsoundary_point = (round(self.boundsoundary_point[0], 5), round(self.boundsoundary_point[1], 5))
+        self.boundary_point = [closest_boundary_point_to_p.x, float(self.f(closest_boundary_point_to_p.x))]
+        self.boundary_point = (round(self.boundary_point[0], 5), round(self.boundary_point[1], 5))
 
-        print(f'Closest boundary point CB to P: {self.boundsoundary_point}')
+        print(f'Closest boundary point CB to P: {self.boundary_point}')
 
-        self.distance = round(self.euclidean_distance(x=self.boundsoundary_point[0], y=self.boundsoundary_point[1]), 5)
+        self.distance = round(self.euclidean_distance(x=self.boundary_point[0], y=self.boundary_point[1]), 5)
 
         print(f'Distance of P to CB: {self.distance}')
 
@@ -88,13 +88,18 @@ class Distance():
         ax.set_ylabel('Y')
 
         x = np.arange(self.bounds['x'][0], self.bounds['x'][1] + 0.01, 0.005)
-        ax.plot(self.p[0], self.p[1], 'r.', markersize=10, label='P')
-        ax.plot(self.boundsoundary_point[0], self.boundsoundary_point[1], 'g.', label='CB', markersize=10)
+
+        ax.plot(self.p[0], self.p[1], 'r.', markersize=10, label=self.get_point_label('P', self.p))
+        ax.plot(self.boundary_point[0], self.boundary_point[1], 'g.', label=self.get_point_label('CB', self.boundary_point), markersize=10)
         ax.plot(x, self.f(x), '-', color='grey', label='Boundary')
-        ax.plot(*self.get_line(boundary_point=self.boundsoundary_point, p=self.p), 'b--', label=f'Distance = {round(self.distance, 3)}')
+        ax.plot(*self.get_line(boundary_point=self.boundary_point, p=self.p), 'b--', label=f'Distance = {round(self.distance, 3)}')
         ax.legend()
         return ax
 
+    def get_point_label(self, name, point):
+        point = [np.float(i) if type(i) == np.ndarray else i for i in point] # array to float so can define round method
+        x, y = point[0], point[1]
+        return f'{0} = ({x:.2f}, {y:.2f})'
 
     def get_norm_distances(self, n=50, ax=None):
 
@@ -133,7 +138,8 @@ class Distance():
         if self.plot:
             ax.plot(self.max_distance_edge_point[0], self.max_distance_edge_point[1], color='orange', marker='.', label='E'
                     , markersize=10, clip_on=False)
-            ax.plot(self.max_distance_boundary_point[0], self.max_distance_boundary_point[1], '.', label='MB', markersize=10)
+            ax.plot(self.max_distance_boundary_point[0], self.max_distance_boundary_point[1], '.'
+                  , label=self.get_point_label('MB', self.max_distance_boundary_point), markersize=10)
             ax.plot(*self.get_line(boundary_point=self.max_distance_boundary_point, p=self.max_distance_edge_point), 'k--'
                     , label=f'Max Distance = {round(self.max_distance, 3)}')
 
