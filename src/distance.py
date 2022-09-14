@@ -76,7 +76,7 @@ class Distance():
             self.get_norm_distances(ax=ax)
             print(f'Max distance from boundary point MB to edge point E: {round(self.max_distance, 5)}')
             print(f'Closest distance as proportion of max distance: {round(100*self.norm_distance, 5)}%')
-            print('some change')
+            print('some change!!!')
 
 
 
