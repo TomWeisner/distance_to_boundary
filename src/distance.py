@@ -1,31 +1,29 @@
 from scipy.optimize import minimize_scalar
 import numpy as np
-import numbers
+from abc import ABC
+from typing import Callable
 
-import matplotlib
-matplotlib.use('Qt5Agg')
-import matplotlib.pyplot as plt
+from src.utils.datatypes import Point, Bounds, DistanceOutput, NormOutput
 
 
-class Distance():
-    """Determine the closest point on a decision boundary to a point P"""
+class Distance(ABC):
+    """ Determine the closest point on a decision boundary to a point P """
 
-    def __init__(self, p, dbf, b, norm=False, plot=False):
+    decimal_places_round = 5 # class attribute so we can import in test assertions
+
+    def __init__(self, p: Point, dbf: Callable, b: Bounds, norm: bool = False):
+        # instance attributes
         self.p = p # point p
         self.dbf = dbf # decision boundary function f
-        self.bounds = dict(b) # bounds for f
+        self.bounds = b # bounds for f
         self.norm = norm # bool denoting whether to normalise distances relative to max possible distance or not
-        self.plot = plot # bool denoting whether to plot or not
 
-        assert 'x' in self.bounds and 'y' in self.bounds
-
-
-    def objective(self, x):
+    def __objective(self, x):
         """The objective is to minimise the returned function below; the Euclidean distance of a point X from P"""
-        y = self.f(x)
-        return self.euclidean_distance(x, y)
+        y = self._f(x)
+        return self.euclidean_distance(x=x, y=y)
 
-    def f(self, x):
+    def _f(self, x):
         try:
             f = self.dbf(x)
         except Exception as e:
@@ -33,85 +31,50 @@ class Distance():
 
         # cap the result by boundaries, requires conversion to array first
         f = np.array(f)
-        f[f < self.bounds['y'][0]] = self.bounds['y'][0]
-        f[f > self.bounds['y'][1]] = self.bounds['y'][1]
+        f[f < self.bounds.y.lower] = self.bounds.y.lower
+        f[f > self.bounds.y.upper] = self.bounds.y.upper
         return f
 
-    def get_line(self, boundary_point, p, num_data_points=50):
-        # return coordinates describing a line between p and boundary_point
-        m = (boundary_point[1] - p[1]) / (boundary_point[0] - p[0])
-        c = boundary_point[1] - m * boundary_point[0]
+    def euclidean_distance(self, x, y):
+        return np.sqrt((self.p.x - x) ** 2 + (self.p.y - y) ** 2)
 
-        if p[0] < boundary_point[0]:
-            x = np.linspace(p[0], boundary_point[0], num=num_data_points)
-            return (x, m * x + c)
-        else:
-            x = np.linspace(boundary_point[0], p[0], num=num_data_points)
-            return (x, m * x + c)
-
-    def euclidean_distance(cls, x, y):
-        return np.sqrt((cls.p[0] - x) ** 2 + (cls.p[1] - y) ** 2)
-
-    def execute(self):
+    def execute(self) -> DistanceOutput:
 
         print(f'Finding nearest distance to point P: {self.p}')
 
         # find the closest point on the boundary to the point p
-        closest_boundary_point_to_p = minimize_scalar(self.objective, bounds=tuple(self.bounds['x']), method='bounded')
-        self.boundary_point = [closest_boundary_point_to_p.x, float(self.f(closest_boundary_point_to_p.x))]
-        self.boundary_point = (round(self.boundary_point[0], 5), round(self.boundary_point[1], 5))
+        closest_boundary_point_to_p = minimize_scalar(self.__objective, bounds=self.bounds.x_tuple, method='bounded')
+        self.boundary_point = [closest_boundary_point_to_p.x, float(self._f(closest_boundary_point_to_p.x))]
+        self.boundary_point = Point(round(self.boundary_point[0], 5), round(self.boundary_point[1], 5))
 
         print(f'Closest boundary point CB to P: {self.boundary_point}')
 
-        self.distance = round(self.euclidean_distance(x=self.boundary_point[0], y=self.boundary_point[1]), 5)
+        self.distance = round(self.euclidean_distance(x=self.boundary_point.x, y=self.boundary_point.y), 5)
 
         print(f'Distance of P to CB: {self.distance}')
 
-        if self.plot:
-            ax = self.construct_figure()
-        else:
-            ax = None
-
         if self.norm:
-            self.get_norm_distances(ax=ax)
-            print(f'Max distance from boundary point MB to edge point E: {round(self.max_distance, 5)}')
-            print(f'Closest distance as proportion of max distance: {round(100*self.norm_distance, 5)}%')
-            print('some change!!!')
+            self.norm_payload = self.get_norm_distances()
+            print(f'Max distance from boundary point MB to edge point E: {self.norm_payload["max_dist_edge_dbf"]}')
+            print(f'Closest distance as proportion of max distance: {100*self.norm_payload["dist_p_proportion"]}%')
 
+        output: DistanceOutput = {
+            'closest_point': self.boundary_point,
+            'distance': round(self.distance, self.decimal_places_round),
+            'norm': self.norm_payload if self.norm else None
+        }
+        return output
 
-
-    def construct_figure(self):
-        fig, ax = plt.subplots()
-        ax.set_xlim((self.bounds['x'][0], self.bounds['x'][1]))
-        ax.set_ylim((self.bounds['y'][0], self.bounds['y'][1]))
-        ax.set_aspect('equal', adjustable='box')
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
-
-        x = np.arange(self.bounds['x'][0], self.bounds['x'][1] + 0.01, 0.005)
-
-        ax.plot(self.p[0], self.p[1], 'r.', markersize=10, label=self.get_point_label('P', self.p))
-        ax.plot(self.boundary_point[0], self.boundary_point[1], 'g.', label=self.get_point_label('CB', self.boundary_point), markersize=10)
-        ax.plot(x, self.f(x), '-', color='grey', label='Boundary')
-        ax.plot(*self.get_line(boundary_point=self.boundary_point, p=self.p), 'b--', label=f'Distance = {round(self.distance, 3)}')
-        ax.legend()
-        return ax
-
-    def get_point_label(self, name, point):
-        point = [np.float(i) if type(i) == np.ndarray else i for i in point] # array to float so can define round method
-        x, y = point[0], point[1]
-        return f'{0} = ({x:.2f}, {y:.2f})'
-
-    def get_norm_distances(self, n=50, ax=None):
+    def get_norm_distances(self, n:int = 50) -> NormOutput:
 
         edge_points = []
         closest_boundary_point_to_all_edge_points = []
         edge_distances = []
 
-        edge_coords  = {'bottom': (list(np.linspace(self.bounds['x'][0], self.bounds['x'][1], n)), [self.bounds['y'][0]] * n)
-                         , 'top': (list(np.linspace(self.bounds['x'][0], self.bounds['x'][1], n)), [self.bounds['y'][1]] * n)
-                        , 'left': ([self.bounds['x'][0]] * n, list(np.linspace(self.bounds['y'][0], self.bounds['y'][1], n)))
-                       , 'right': ([self.bounds['x'][1]] * n, list(np.linspace(self.bounds['y'][0], self.bounds['y'][1], n)))}
+        edge_coords  = {'bottom': (list(np.linspace(self.bounds.x.lower, self.bounds.x.upper, n)), [self.bounds.y.lower] * n)
+                         , 'top': (list(np.linspace(self.bounds.x.lower, self.bounds.x.upper, n)), [self.bounds.y.upper] * n)
+                        , 'left': ([self.bounds.x.lower] * n, list(np.linspace(self.bounds.y.lower, self.bounds.y.upper, n)))
+                       , 'right': ([self.bounds.x.upper] * n, list(np.linspace(self.bounds.y.lower, self.bounds.y.upper, n)))}
 
         # for each of the 4 edges our plot has...
         for edge, coords in edge_coords.items():
@@ -120,12 +83,12 @@ class Distance():
             for coord in zipped_coords:
                 edge_points.append(coord)
                 # redefine p so minimize_scalar looks at the right point
-                self.p = coord
+                self.p = Point(coord[0], coord[1])
                 # for our new p, what is the closest boundary point
-                closest_boundary_point_to_edge_point = minimize_scalar(self.objective, bounds=tuple(self.bounds['x']), method='bounded')
+                closest_boundary_point_to_edge_point = minimize_scalar(self.__objective, bounds=tuple(self.bounds.x_tuple), method='bounded')
                 # notice how we call the 'x' part of the object just made
-                closest_boundary_point_to_all_edge_points.append([closest_boundary_point_to_edge_point.x, self.f(closest_boundary_point_to_edge_point.x)])
-                edge_distances.append(self.objective(closest_boundary_point_to_edge_point.x))
+                closest_boundary_point_to_all_edge_points.append([closest_boundary_point_to_edge_point.x, self._f(closest_boundary_point_to_edge_point.x)])
+                edge_distances.append(self.__objective(closest_boundary_point_to_edge_point.x))
 
         self.max_distance_index = np.argmax(edge_distances)
         self.max_distance = edge_distances[self.max_distance_index]
@@ -133,16 +96,16 @@ class Distance():
         # what is the associated boundary point?
         self.max_distance_boundary_point = closest_boundary_point_to_all_edge_points[self.max_distance_index]
 
-        # norm distance of our original point p
-        self.norm_distance = round(self.distance / self.max_distance, 3)
+        norm_output: NormOutput = {
+            'max_dist_edge_dbf': self.max_distance,
+            'max_dist_edge_point': Point(x=self.max_distance_edge_point[0], y=self.max_distance_edge_point[1]),
+            'max_dist_dbf_point': Point(x=self.max_distance_boundary_point[0], y=self.max_distance_boundary_point[1]),
+            'dist_p_proportion': self.distance / self.max_distance
+        }
 
-        if self.plot:
-            ax.plot(self.max_distance_edge_point[0], self.max_distance_edge_point[1], color='orange', marker='.', label='E'
-                    , markersize=10, clip_on=False)
-            ax.plot(self.max_distance_boundary_point[0], self.max_distance_boundary_point[1], '.'
-                  , label=self.get_point_label('MB', self.max_distance_boundary_point), markersize=10)
-            ax.plot(*self.get_line(boundary_point=self.max_distance_boundary_point, p=self.max_distance_edge_point), 'k--'
-                    , label=f'Max Distance = {round(self.max_distance, 3)}')
+        # round any floats
+        for key, value in norm_output.items():
+            if isinstance(value, float):
+                norm_output[key] = round(value, self.decimal_places_round)
 
-            ax.set_title(f'Distance: {self.distance}, of max: {round(100*self.norm_distance, 3)}%')
-            ax.legend()
+        return norm_output
